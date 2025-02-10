@@ -2,18 +2,33 @@
 #include "res://shaders/raymarcher/SDFShapes.gdshaderinc"
 #include "res://shaders/raymarcher/SDFOperations.gdshaderinc"
 
-float sdf_object_type(vec3 p, sdf_object obj){
-	switch (obj.object_type){
-		case sphere:
-			return sdSphere(p, 1.);
-	}
-	return 0.;
+float ObjectTypeToSDF(vec3 p, SDFObject obj) {
+    switch (obj.object_type) {
+        case SHAPE_SPHERE:
+            return sdSphere(p, obj.params[0]);
+        case SHAPE_BOX:
+            return sdBox(p, vec3(obj.params[0], obj.params[1], obj.params[2]));
+        case SHAPE_BOX_FRAME:
+            return sdBoxFrame(p, vec3(obj.params[0], obj.params[1], obj.params[2]), obj.params[3]);
+        case SHAPE_TORUS:
+            return sdTorus(p, vec2(obj.params[0], obj.params[1]));
+        case SHAPE_CONE:
+            return sdCone(p, vec2(obj.params[0], obj.params[1]), obj.params[2]);
+        case SHAPE_CYLINDER:
+            return sdCylinder(p, vec3(obj.params[0], obj.params[1], obj.params[2]));
+        case SHAPE_PLANE:
+            return sdPlane(p, vec3(obj.params[0], obj.params[1], obj.params[2]), obj.params[3]);
+        case SHAPE_CAPSULE:
+            return sdCapsule(p, obj.params[0], obj.params[1]);
+        default:
+            return 0.0; // Default case if object_type is unrecognized
+    }
 }
 
-sdf_object[MAX_OBJECT_COUNT] float_array_to_sdf_object_array(float[MAX_OBJECT_COUNT * sizeof_sdf_object] buff){
-	sdf_object objs[MAX_OBJECT_COUNT];
+SDFObject[MAX_OBJECT_COUNT] float_array_to_sdf_object_array(float[MAX_OBJECT_COUNT * sizeof_sdf_object] buff){
+	SDFObject objs[MAX_OBJECT_COUNT];
 	for(int i = 0; i < MAX_OBJECT_COUNT; i++){
-		sdf_object obj;
+		SDFObject obj;
 
 		//all references to obj_index must use obj_index++
 		//so we keep proper could of our curr index in the object

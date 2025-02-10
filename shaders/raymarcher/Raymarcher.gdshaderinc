@@ -5,31 +5,74 @@
 #include "res://shaders/raymarcher/SceneDataHelper.gdshaderinc"
 
 
-float map(in vec3 p){
-	float f = 0.;
+Ray map(in vec3 p){
+	Ray r;
+	r.dist = MAX_DIST;
 
-	mat4 m = mat4(
-		vec4(sin(TIME),0,cos(TIME),0),
+	SDFObject obj;
+	obj.object_type = SHAPE_BOX;
+	float t = TIME/1.;
+	obj.transform = mat4(
+		vec4(sin(t),0,cos(t),0),
 		vec4(0,1,0,0),
-		vec4(-cos(TIME),0,sin(TIME),0),
-		vec4(0,0,0,1)
+		vec4(-cos(t),0,sin(t),0),
+		vec4(0.,0.,0.,1)
 	);
+		//obj.transform = mat4(
+		//vec4(1.,0.,0.,0.),
+		//vec4(0.,1.,0.,0.),
+		//vec4(0.,0.,1.,0.),
+		//vec4(0.,0.,0.,1.)
+	//);
+	obj.params[0] = 0.5;
+	obj.params[1] = 0.5;
+	obj.params[2] = 0.5;
 
-	//p = opTransform(p, m);
-	f = opSmoothUnion(sdBoxFrame(p, vec3(1., 1., 1.), .05), f, .5);
-	f = sdBox(p + vec3(0., sin(TIME), cos(TIME)), vec3(.5,0.5,0.5));
-	f = min(sdSphere(p + vec3(1.5, 0., 0.), .5), f);
-	f = min(sdSphere(p + vec3(-1.5, sin(TIME), cos(TIME)), .5), f);
-	for(int i = 0; i < MAX_OBJECT_COUNT; i++){
-		f = opSmoothUnion(
-			sdSphere(p + vec3(-1.5, 10. * float(i)/float(MAX_OBJECT_COUNT) * sin(TIME + float(i)),
-			10. * float(i)/float(MAX_OBJECT_COUNT) * cos(TIME + float(i))), .5), f, .1);
-	}
-	return f;
+	obj.params[3] = .5;
+	obj.params[4] = .5;
+	obj.params[5] = .5;
+
+	//for(int i = 0; i < MAX_OBJECT_COUNT; i++){
+		////r.dist = opSmoothUnion(
+			////sdSphere(p + vec3(-1.5, 10. * float(i)/float(MAX_OBJECT_COUNT) * sin(TIME + float(i)),
+			////10. * float(i)/float(MAX_OBJECT_COUNT) * cos(TIME + float(i))), .5), r.dist, .1);
+		//r.dist = opSmoothUnion(
+			//sdSphere(p + vec3(-1.5, 10. * float(i)/float(MAX_OBJECT_COUNT) * sin(TIME + float(i)),
+			//10. * float(i)/float(MAX_OBJECT_COUNT) * cos(TIME + float(i))), .5), r.dist, 6. * abs(sin(TIME/2.)));
+		////r.dist = opUnion(
+			////sdSphere(p + vec3(-1.5, 10. * float(i)/float(MAX_OBJECT_COUNT) * sin(TIME + float(i)),
+			////10. * float(i)/float(MAX_OBJECT_COUNT) * cos(TIME + float(i))), .5), r.dist);
+	//}
+	r.dist = opUnion(r.dist, sdBox(p + vec3(0., -5.,1.), vec3(.5,.5,.5)));
+	//r.dist = opUnion(opOnion(sdTorus(p + vec3(0.,-5.,0.), vec2(5., 5.)), .2),r.dist);
+	//r.dist = opSubtraction(sdPlane(p, vec3(-.5, -1., 0), 5.), r.dist);
+	r.dist = opUnion(r.dist, sdSphere(p + vec3(-5., -5.,sin(20.*TIME)), 1.));
+
+	r.dist = opSmoothUnion(r.dist, sdSphere(p  + vec3(0., -5.,0.), .5), .25);
+	r.dist = opUnion(opDisplace(sdSphere(p + vec3(-10.,-5.,0.), 2.),
+								(sin(sin(TIME/10.)*p.x)*(sin(cos(TIME/4.)*p.y))*sin(1.*p.z))),
+	 r.dist);
+
+	//p - s*round(p/s)
+	r.dist = opUnion(r.dist,
+				opDisplace(
+					ObjectTypeToSDF(
+						opTransform(
+							opRepetition(p, vec3(2.,0.,2.)),
+							obj.transform
+						),
+						obj
+					),
+					(sin(sin(TIME/10.)*p.x)*(sin(cos(TIME/4.)*p.y))*sin(1.*p.z))
+				)
+			);
+
+	r.dist = opUnion(sdPlane(p, vec3(0., 1., 0), 20.), r.dist);
+	return r;
 }
 
 //P is the sample point of the ray
-float map(in vec3 p, in sdf_object[MAX_OBJECT_COUNT] obj_buffer){
+float map(in vec3 p, in SDFObject[MAX_OBJECT_COUNT] obj_buffer){
 	float f = MAX_DIST;
 	for(int i = 0; i < MAX_OBJECT_COUNT; i++){
 		//since we sort before we send to the gpu
@@ -41,50 +84,63 @@ float map(in vec3 p, in sdf_object[MAX_OBJECT_COUNT] obj_buffer){
 	return f;
 }
 
-//Found this here : https://www.shadertoy.com/view/4dj3Dw
-vec4 tex3D( in vec3 pos, in vec3 normal, sampler2D sampler ){
-	return 	texture( sampler, pos.yz - 0.5)*abs(normal.x)+
-			texture( sampler, pos.xz - 0.5)*abs(normal.y)+
-			texture( sampler, pos.xy - 0.5)*abs(normal.z);
-}
-
-//Found this here : https://www.shadertoy.com/view/4dj3Dw
-//vec4 tex3D( in vec3 pos, in vec3 normal, sampler2D sampler ){
-	//return 	texture( sampler, pos.yz)*abs(normal.x)+
-			//texture( sampler, pos.xz)*abs(normal.y)+
-			//texture( sampler, pos.xy)*abs(normal.z);
+//vec2 calcUV(in vec3 pos, in vec3 normal, in mat4 transform){
+	//vec3 n = normalize(normal);
+	//// Generate UVs for each principal axis.
+	//vec2 uv_x = vec2(pos.y, pos.z);
+	//vec2 uv_y = vec2(pos.x, pos.z);
+	//vec2 uv_z = vec2(pos.x, pos.y);
+//
+	//// Blend the UVs based on the absolute normal values.
+	//return (abs(n.x) * uv_x + abs(n.y) * uv_y + abs(n.z) * uv_z) /
+	          //(abs(n.x) + abs(n.y) + abs(n.z));
 //}
 
 // https://iquilezles.org/articles/normalsSDF
-vec3 calcNormal( in vec3 pos)
-{
+vec3 calcNormal( in vec3 pos){
     vec2 e = vec2(1.0,-1.0)*0.5773;
     const float eps = 0.0005;
-    return normalize( e.xyy*map( pos + e.xyy*eps ) +
-					  e.yyx*map( pos + e.yyx*eps ) +
-					  e.yxy*map( pos + e.yxy*eps ) +
-					  e.xxx*map( pos + e.xxx*eps ) );
+    return normalize( e.xyy*map( pos + e.xyy*eps ).dist +
+					  e.yyx*map( pos + e.yyx*eps ).dist +
+					  e.yxy*map( pos + e.yxy*eps ).dist +
+					  e.xxx*map( pos + e.xxx*eps ).dist );
 }
+
+vec2 calcUV(in vec3 pos, in mat4 object_transform){
+	// Transform hit position from world space to object (local) space.
+	vec3 localPos = (inverse(object_transform) * vec4(pos, 1.0)).xyz;
+
+	// Now use localPos for UV mapping.
+	// For triplanar mapping in local space:
+	vec3 n_local = normalize(calcNormal(localPos));
+	vec2 uv_x = vec2(localPos.y, localPos.z);
+	vec2 uv_y = vec2(localPos.x, localPos.z);
+	vec2 uv_z = vec2(localPos.x, localPos.y);
+	return (abs(n_local.x) * uv_x + abs(n_local.y) * uv_y + abs(n_local.z) * uv_z) /
+	          (abs(n_local.x) + abs(n_local.y) + abs(n_local.z));
+}
+//segment tracing
 
 //This tutorial a huge help here!
 //https://www.youtube.com/watch?v=khblXafu7iA
+Ray raymarch(vec3 ro, vec3 rd){
+	Ray r;
+	r.dist = 0.;
+	r.iterations = 0;
+	r.exit_early = false;
 
-vec2 raymarch(vec3 ro, vec3 rd){
-    float t = 0.0;
-	float ep = epsilon;
-	int i0;
-
-	sdf_object obj_buff[MAX_OBJECT_COUNT];
-
+	//SDFObject obj_buff[MAX_OBJECT_COUNT];
 
     for( int i=0; i < ITERATIONS; i++ ){
-		i0=i;
-        vec3 pos = ro + rd * t; //position along ray
-        float d = map(pos); //current dist to scene
-		t += d;
-		ep = epsilon * t;
-		if (d < ep) break; //early stop
-		if(t > MAX_DIST) return vec2(-1,-1);
+		r.iterations = i;
+        vec3 pos = ro + rd * r.dist; //position along ray
+        float d = map(pos).dist; //current dist to scene
+		r.dist += d;
+		if(d < EPSILON * r.dist) break; //early stop
+		if(r.dist > MAX_DIST) {
+			r.exit_early = true;
+			return r;
+		}
     }
-	return vec2(t, float(i0));
+	return r;
 }

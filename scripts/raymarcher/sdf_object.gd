@@ -9,7 +9,7 @@ class_name SDFObject
 @export var color : Color;
 
 var aabb : AABB
-var vis_notifier_rid : RID
+var vis_notifier_rid : RID #TODO implement AABB checking in editor
 
 var gizmo_plugin : EditorNode3DGizmoPlugin;
 
